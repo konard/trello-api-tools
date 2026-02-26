@@ -1,6 +1,6 @@
 {
   "name": "trello-api-tools",
-  "version": "0.7.0",
+  "version": "0.6.0",
   "description": "A collection of Node.js tools for working with the Trello API",
   "type": "module",
   "main": "src/index.js",
