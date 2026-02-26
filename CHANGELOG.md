@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+### Minor Changes
+
+- bdc7a97: Add Trello API tools: create-board.mjs, create-list.mjs, create-card.mjs, download-card.mjs and corresponding test scripts mirroring the kaiten-api-tools pattern
+
 ## 0.6.0
 
 ### Minor Changes
