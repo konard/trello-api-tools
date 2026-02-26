@@ -1,227 +1,193 @@
-# js-ai-driven-development-pipeline-template
+[![Open in Gitpod](https://img.shields.io/badge/Gitpod-ready--to--code-f29718?logo=gitpod)](https://gitpod.io/#https://github.com/konard/trello-api-tools)
+[![Open in GitHub Codespaces](https://img.shields.io/badge/GitHub%20Codespaces-Open-181717?logo=github)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=konard/trello-api-tools)
 
-A comprehensive template for AI-driven JavaScript/TypeScript development with full CI/CD pipeline support.
+# trello-api-tools
 
-## Features
+A collection of Node.js tools for working with the Trello API (https://developer.atlassian.com/cloud/trello/rest/). These tools help you download cards with metadata, comments, attachments, and checklists, plus create boards, lists, and cards.
 
-- **Multi-runtime support**: Works with Bun, Node.js, and Deno
-- **Universal testing**: Uses [test-anywhere](https://github.com/link-foundation/test-anywhere) for cross-runtime tests
-- **Automated releases**: Changesets-based versioning with GitHub Actions
-- **Code quality**: ESLint + Prettier with pre-commit hooks via Husky
-- **Package manager agnostic**: Works with bun, npm, yarn, pnpm, and deno
-- **Broken link checks**: Automated link validation with [lychee](https://github.com/lycheeverse/lychee-action) and Web Archive fallback suggestions
-
-## Quick Start
-
-### Using This Template
-
-1. Click "Use this template" on GitHub to create a new repository
-2. Clone your new repository
-3. Update `package.json` with your package name and description
-4. Update the `PACKAGE_NAME` constant in these scripts:
-   - `scripts/validate-changeset.mjs`
-   - `scripts/merge-changesets.mjs`
-   - `scripts/publish-to-npm.mjs`
-   - `scripts/format-release-notes.mjs`
-   - `scripts/create-manual-changeset.mjs`
-5. Install dependencies: `bun install`
-6. Start developing!
-
-### Development
+## 🚀 Quick Start
 
 ```bash
-# Install dependencies
-bun install
+# Set up environment
+export TRELLO_API_KEY="your-api-key"
+export TRELLO_API_TOKEN="your-api-token"
 
-# Run tests
-bun test
+# Download a single card by ID or URL
+node download-card.mjs "abc123shortlink" --stdout-only
 
-# Or with other runtimes:
-npm test
-deno test --allow-read
-
-# Lint code
-bun run lint
-
-# Format code
-bun run format
-
-# Check all (lint + format + file size)
-bun run check
+# Download card by Trello URL
+node download-card.mjs "https://trello.com/c/abc123shortlink" --stdout-only
 ```
 
-## Project Structure
+## 📥 download-card.mjs
+
+Downloads Trello cards and converts them to Markdown format with metadata, comments, attachments, and checklists.
+
+### Features
+
+- **📝 Markdown Export**: Converts cards to Markdown
+- **✅ Checklist Support**: Handles all checklist items with completion status
+- **📎 Attachment Downloads**: Downloads attachments or keeps direct links
+- **💬 Comments Export**: Includes all card comments with metadata
+- **🔗 URL Parsing**: Accepts card IDs or Trello card URLs
+- **📊 Metadata**: Card status, labels, due dates, and more
+
+### Usage
+
+#### Basic Usage
+
+```bash
+# Download card by ID/short link
+node download-card.mjs abc123shortlink
+
+# Download card by Trello URL
+node download-card.mjs "https://trello.com/c/abc123shortlink"
+
+# Download with API key/token override
+node download-card.mjs abc123shortlink --key your-key --token your-token
+
+# Output to stdout instead of files
+node download-card.mjs "https://trello.com/c/abc123shortlink" --stdout-only
+
+# Specify output directory
+node download-card.mjs abc123shortlink --output-dir ./my-cards
+```
+
+#### Advanced Features
+
+```bash
+# Skip attachment downloads, keep direct Trello URLs
+node download-card.mjs "https://trello.com/c/abc123shortlink" --skip-files-download
+
+# Combine options
+node download-card.mjs "https://trello.com/c/abc123shortlink" --skip-files-download --output-dir ./cards
+```
+
+### Output Structure
+
+When downloading to files (without `--stdout-only`):
 
 ```
-.
-├── .changeset/           # Changeset configuration
-├── .github/workflows/    # GitHub Actions CI/CD
-├── .husky/               # Git hooks (pre-commit)
-├── examples/             # Usage examples
-├── scripts/              # Build and release scripts
-├── src/                  # Source code
-│   ├── index.js          # Main entry point
-│   └── index.d.ts        # TypeScript definitions
-├── tests/                # Test files
-├── .eslintrc.js          # ESLint configuration
-├── .prettierrc           # Prettier configuration
-├── bunfig.toml           # Bun configuration
-├── deno.json             # Deno configuration
-└── package.json          # Node.js package manifest
+./data/
+└── <card-id>/             # Card ID (e.g., "abc123shortlink")
+    ├── card.md            # Main card in Markdown format
+    ├── card.json          # Raw JSON card data
+    ├── checklists.json    # Checklists data (if any)
+    ├── comments/          # Individual comment files (sortable by creation date)
+    │   ├── 2025-08-22-00-21-15-156.json
+    │   └── ...
+    └── files/             # Downloaded attachments (if not using --skip-files-download)
+        ├── document.pdf
+        └── image.png
 ```
 
-## Design Choices
+### Markdown Output Format
 
-### Multi-Runtime Support
+Generated Markdown includes:
 
-This template is designed to work seamlessly with all major JavaScript runtimes:
+- **Header**: Card title as H1
+- **Metadata**: ID, short link, board ID, list ID, labels, due dates
+- **Description**: Card description
+- **Checklists**: All checklist items with completion status
+- **Comments**: All comments with timestamps and authors
+- **Attachments**: Attachments as links/images
 
-- **Bun**: Primary runtime with highest performance, uses native test support (`bun test`)
-- **Node.js**: Alternative runtime, uses built-in test runner (`node --test`)
-- **Deno**: Secure runtime with built-in TypeScript support (`deno test`)
+### Environment Variables
 
-The [test-anywhere](https://github.com/link-foundation/test-anywhere) framework provides a unified testing API that works identically across all runtimes.
+```bash
+# Required
+TRELLO_API_KEY=your-api-key-here
+TRELLO_API_TOKEN=your-api-token-here
 
-### Package Manager Agnostic
+# Optional
+TRELLO_API_BASE_URL=https://api.trello.com/1  # default
+DEBUG=trello:*  # Enable debug logging
+```
 
-While `package.json` is the source of truth for dependencies, the template supports:
+### CLI Options
 
-- **bun**: Primary choice, uses `bun.lockb`
-- **npm**: Uses `package-lock.json`
-- **yarn**: Uses `yarn.lock`
-- **pnpm**: Uses `pnpm-lock.yaml`
-- **deno**: Uses `deno.json` for configuration
+| Option                  | Description                                        |
+| ----------------------- | -------------------------------------------------- |
+| `--stdout-only`         | Output Markdown to stdout instead of files         |
+| `--output-dir <dir>`    | Specify output directory (default: ./data)         |
+| `--key <key>`           | API key (overrides environment variable)           |
+| `--token <token>`       | API token (overrides environment variable)         |
+| `--skip-files-download` | Don't download attachments, use direct Trello URLs |
+| `--help`                | Show help message                                  |
 
-Note: `package-lock.json` is not committed by default to allow any package manager.
+### Programmatic Usage
 
-### Code Quality
+```javascript
+import { downloadCard } from './download-card.mjs';
 
-- **ESLint**: Configured with recommended rules + Prettier integration
-- **Prettier**: Consistent code formatting
-- **Husky + lint-staged**: Pre-commit hooks ensure code quality
-- **File size limit**: Scripts must stay under 1000 lines for maintainability
+// Basic usage
+const { card, markdown, comments, checklists } = await downloadCard({
+  cardId: 'abc123shortlink',
+  key: 'your-key',
+  token: 'your-token',
+});
 
-### Release Workflow
+// With options
+const result = await downloadCard({
+  cardId: 'abc123shortlink',
+  key: 'your-key',
+  token: 'your-token',
+  skipFiles: true,
+  quiet: true, // Suppress error console output
+});
+```
 
-The release workflow uses [Changesets](https://github.com/changesets/changesets) for version management:
+## 🛠️ create-\*.mjs Scripts
 
-1. **Creating a changeset**: Run `bun run changeset` to document changes
-2. **PR validation**: CI checks for valid changeset in each PR
-3. **Automated versioning**: Merging to `main` triggers version bump
-4. **npm publishing**: Automated via OIDC trusted publishing (no tokens needed)
-5. **GitHub releases**: Auto-created with formatted release notes
+Helper scripts for creating Trello resources programmatically:
 
-#### Manual Releases
+### create-board.mjs
 
-Two manual release modes are available via GitHub Actions:
+```bash
+# Create a new board
+node create-board.mjs "My New Board"
+node create-board.mjs "My New Board" board-output.json
+```
 
-- **Instant release**: Immediately bump version and publish
-- **Changeset PR**: Create a PR with changeset for review
+### create-list.mjs
 
-### CI/CD Pipeline
+```bash
+# Create a list in a board
+node create-list.mjs <boardId> "My List"
+node create-list.mjs <boardId> "My List" list-output.json
+```
 
-The GitHub Actions workflow (`.github/workflows/release.yml`) provides:
+### create-card.mjs
 
-1. **Changeset check**: Validates PR has exactly one changeset (added by that PR)
-2. **Lint & format**: Ensures code quality standards
-3. **Test matrix**: 3 runtimes × 3 OS = 9 test combinations
-4. **Broken link checks**: Validates all links in Markdown/HTML files, checks Web Archive for broken links
-5. **Changeset merge**: Combines multiple pending changesets at release time
-6. **Release**: Automated versioning and npm publishing
+```bash
+# Create a card in a list
+node create-card.mjs <listId> "My Card Title"
+node create-card.mjs <listId> "My Card Title" card-output.json
+```
 
-#### Robust Changeset Handling
+All create scripts support the same environment variables as download-card.mjs and will output the created resource data in JSON format.
 
-The CI/CD pipeline is designed to handle concurrent PRs gracefully:
+## 🧪 Testing
 
-- **PR Validation**: Only validates changesets **added by the current PR**, not pre-existing ones from other merged PRs. This prevents false failures when multiple PRs merge before a release cycle completes.
+```bash
+# Run all tests
+node test-download-card.mjs
+node test-command-stream.mjs
+node test-use-m.mjs
+node test-axios-error-serialization.mjs
 
-- **Release-time Merging**: If multiple changesets exist when releasing, they are automatically merged into a single changeset with:
-  - The highest version bump type (major > minor > patch)
-  - All descriptions preserved in chronological order
+# Tests require environment variables to be set
+# Creates temporary test resources and cleans them up
+```
 
-This design decouples PR validation from the need to pull changes from the default branch, reducing conflicts and ensuring that even if CI/CD fails, all unpublished changesets will still get published when the error is resolved.
+## 📚 API Reference
 
-### Broken Link Checker
+Built using the official [Trello REST API documentation](https://developer.atlassian.com/cloud/trello/rest/). Supports downloading cards with metadata, comments, attachments, and checklists, plus creating boards, lists, and cards.
 
-The link checker workflow (`.github/workflows/links.yml`) validates all links in Markdown and HTML files:
+## 🔑 Authentication
 
-1. **Detection**: Uses [lychee](https://github.com/lycheeverse/lychee-action) to scan all `*.md` and `*.html` files
-2. **Web Archive fallback**: For any broken links found, automatically checks the [Wayback Machine](https://web.archive.org) for archived versions
-3. **Actionable suggestions**: Reports one of three outcomes for each broken link:
-   - **Archived**: Suggests the Web Archive URL as a replacement
-   - **Not archived**: Clearly reports the link is unrecoverable
-4. **Scheduled checks**: Runs weekly to catch links that break over time (even if no files changed)
-5. **Issue creation**: On scheduled runs, creates a GitHub Issue with the full broken links report
+Trello uses API Key + Token authentication. To get your credentials:
 
-Add regex patterns to `.lycheeignore` to exclude URLs from checks (e.g., local dev URLs, example.com, known rate-limited sites).
-
-## Configuration
-
-### Updating Package Name
-
-After creating a repository from this template, update the package name in:
-
-1. `package.json`: `"name": "your-package-name"`
-2. `.changeset/config.json`: Package references
-3. Scripts that reference the package name (see Quick Start)
-
-### ESLint Rules
-
-Customize ESLint in `eslint.config.js`. Current configuration:
-
-- ES Modules support
-- Prettier integration
-- No console restrictions (common in CLI tools)
-- Strict equality enforcement
-- Async/await best practices
-- **Strict unused variables rule**: No exceptions - all unused variables, arguments, and caught errors must be removed (no `_` prefix exceptions)
-
-### Prettier Options
-
-Configured in `.prettierrc`:
-
-- Single quotes
-- Semicolons
-- 2-space indentation
-- 80-character line width
-- ES5 trailing commas
-- LF line endings
-
-## Scripts Reference
-
-| Script                 | Description                             |
-| ---------------------- | --------------------------------------- |
-| `bun test`             | Run tests with Bun                      |
-| `bun run lint`         | Check code with ESLint                  |
-| `bun run lint:fix`     | Fix ESLint issues automatically         |
-| `bun run format`       | Format code with Prettier               |
-| `bun run format:check` | Check formatting without changing files |
-| `bun run check`        | Run all checks (lint + format)          |
-| `bun run changeset`    | Create a new changeset                  |
-
-## Contributing
-
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed contribution guidelines.
-
-Quick steps:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes
-4. Create a changeset: `bun run changeset`
-5. Commit your changes (pre-commit hooks will run automatically)
-6. Push and create a Pull Request
-
-## Best Practices
-
-This template implements CI/CD best practices for AI-driven development. See [BEST-PRACTICES.md](docs/BEST-PRACTICES.md) for details on:
-
-- File size limits for AI readability
-- Automated formatting and linting
-- Multi-runtime and cross-platform testing
-- Changeset-based versioning
-- Concurrency control for CI/CD pipelines
-
-## License
-
-[Unlicense](LICENSE) - Public Domain
+1. Go to https://trello.com/power-ups/admin and create a Power-Up to get your API Key
+2. Use your API Key to generate a Token at: `https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=YOUR_API_KEY`
+3. Set both as environment variables: `TRELLO_API_KEY` and `TRELLO_API_TOKEN`

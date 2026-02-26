@@ -1,7 +1,7 @@
 {
-  "name": "my-package",
+  "name": "trello-api-tools",
   "version": "0.6.0",
-  "description": "A JavaScript/TypeScript package template for AI-driven development",
+  "description": "A collection of Node.js tools for working with the Trello API",
   "type": "module",
   "main": "src/index.js",
   "types": "src/index.d.ts",
@@ -26,16 +26,17 @@
     "changeset:status": "changeset status --since=origin/main"
   },
   "keywords": [
-    "template",
+    "trello",
+    "api",
+    "tools",
     "javascript",
-    "typescript",
-    "ai-driven"
+    "cli"
   ],
   "author": "",
   "license": "Unlicense",
   "repository": {
     "type": "git",
-    "url": "https://github.com/link-foundation/js-ai-driven-development-pipeline-template"
+    "url": "https://github.com/konard/trello-api-tools"
   },
   "engines": {
     "node": ">=20.0.0"
