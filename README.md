@@ -186,8 +186,52 @@ Built using the official [Trello REST API documentation](https://developer.atlas
 
 ## 🔑 Authentication
 
-Trello uses API Key + Token authentication. To get your credentials:
+Trello uses API Key + Token authentication. Follow these exact steps to get your credentials:
 
-1. Go to https://trello.com/power-ups/admin and create a Power-Up to get your API Key
-2. Use your API Key to generate a Token at: `https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=YOUR_API_KEY`
-3. Set both as environment variables: `TRELLO_API_KEY` and `TRELLO_API_TOKEN`
+### Step 1: Get your API Key
+
+1. Log in to your Trello account at https://trello.com
+2. Go to the Power-Ups admin page: https://trello.com/power-ups/admin
+3. Click **"New"** to create a new Power-Up (you can name it anything, e.g. "My API Tools")
+4. Fill in the required fields (Name, Workspace, etc.) and click **"Create"**
+5. In your Power-Up settings, click the **"API Key"** tab
+6. Click **"Generate a new API Key"** if no key exists yet
+7. Copy the **API Key** shown on the page — this is your `TRELLO_API_KEY`
+
+> **Note:** Your API Key is tied to your Trello account, not a specific board or workspace.
+
+### Step 2: Generate a Token
+
+1. With your API Key from Step 1, open the following URL in your browser (replace `YOUR_API_KEY` with your actual key):
+
+   ```
+   https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=YOUR_API_KEY
+   ```
+
+2. Trello will show an authorization page — click the green **"Allow"** button
+3. You will be redirected to a page showing your **Token** — copy it
+4. This token is your `TRELLO_API_TOKEN`
+
+> **Security Note:** Your token grants full access to your Trello account. Keep it secret and never commit it to version control. Revoke it immediately at https://trello.com/your/account/applications if it is ever exposed.
+
+### Step 3: Set Environment Variables
+
+```bash
+export TRELLO_API_KEY="your-api-key-here"
+export TRELLO_API_TOKEN="your-api-token-here"
+```
+
+Or copy `.env.example` to `.env` and fill in both values:
+
+```bash
+cp .env.example .env
+# Edit .env and set TRELLO_API_KEY and TRELLO_API_TOKEN
+```
+
+### Verify your credentials
+
+```bash
+curl "https://api.trello.com/1/members/me?key=$TRELLO_API_KEY&token=$TRELLO_API_TOKEN"
+```
+
+This should return a JSON object with your Trello account information.
