@@ -607,7 +607,26 @@ if (invokedPath === currentFilePath) {
     } else if (err.response?.data) {
       console.error(JSON.stringify(err.response.data, null, 2));
     } else {
-      console.error(err);
+      console.error(err.message);
+    }
+    if (
+      err.message === 'Set environment variable TRELLO_API_KEY' ||
+      err.message === 'Set environment variable TRELLO_API_TOKEN'
+    ) {
+      console.error('');
+      console.error('To get your Trello API credentials:');
+      console.error(
+        '  1. Get API Key: go to https://trello.com/power-ups/admin → create a Power-Up → API Key tab'
+      );
+      console.error(
+        '  2. Get Token: open https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=YOUR_API_KEY → click Allow → copy the token'
+      );
+      console.error('  3. Set variables:');
+      console.error('       export TRELLO_API_KEY="your-api-key"');
+      console.error('       export TRELLO_API_TOKEN="your-token"');
+      console.error(
+        '  For full details see: https://github.com/konard/trello-api-tools#-authentication'
+      );
     }
     process.exit(1);
   }
