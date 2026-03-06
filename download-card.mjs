@@ -50,19 +50,34 @@ const yargs = yargsModule.default || yargsModule;
  * @param {object} params - Request query params.
  */
 async function downloadFile(url, filePath, params = {}) {
-  const response = await axios({
-    method: 'GET',
-    url,
-    responseType: 'stream',
-    params,
-  });
+  let response;
+  try {
+    response = await axios({
+      method: 'GET',
+      url,
+      responseType: 'stream',
+      params,
+    });
+  } catch (err) {
+    if (err.response?.data?.destroy) {
+      err.response.data.destroy();
+    }
+    throw err;
+  }
 
   const writer = createWriteStream(filePath);
-  response.data.pipe(writer);
 
   return new Promise((resolve, reject) => {
     writer.on('finish', resolve);
-    writer.on('error', reject);
+    writer.on('error', (err) => {
+      writer.destroy();
+      reject(err);
+    });
+    response.data.on('error', (err) => {
+      writer.destroy();
+      reject(err);
+    });
+    response.data.pipe(writer);
   });
 }
 
@@ -450,8 +465,7 @@ async function saveAttachments({ attachments, filesDir, argv }) {
   }
   await mkdir(filesDir, { recursive: true });
   console.log(`\n✓ Downloading ${attachments.length} attachment(s):`);
-  const params =
-    argv.key && argv.token ? { key: argv.key, token: argv.token } : {};
+  const params = { key: argv.key, token: argv.token };
   for (const attachment of attachments) {
     const fileName = attachment.name || `attachment_${attachment.id}`;
     const filePath = path.join(filesDir, fileName);
