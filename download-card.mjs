@@ -47,18 +47,51 @@ const yargs = yargsModule.default || yargsModule;
  * Download a file from URL to a local path.
  * @param {string} url - The file URL.
  * @param {string} filePath - The local file path.
- * @param {object} params - Request query params.
+ * @param {object} options - Download options.
+ * @param {string} [options.key] - Trello API key for Authorization header.
+ * @param {string} [options.token] - Trello API token for Authorization header.
+ * @param {boolean} [options.verbose] - Log HTTP request/response details.
  */
-async function downloadFile(url, filePath, params = {}) {
+async function downloadFile(url, filePath, { key, token, verbose } = {}) {
+  const headers = {};
+  if (key && token) {
+    headers['Authorization'] =
+      `OAuth oauth_consumer_key="${key}", oauth_token="${token}"`;
+  }
+
+  if (verbose) {
+    console.error(`[verbose] GET ${url}`);
+    console.error(
+      `[verbose] Headers: Authorization: OAuth oauth_consumer_key="<redacted>", oauth_token="<redacted>"`
+    );
+  }
+  log('downloadFile: GET %s', url);
+
   let response;
   try {
     response = await axios({
       method: 'GET',
       url,
       responseType: 'stream',
-      params,
+      headers,
     });
+    if (verbose) {
+      console.error(
+        `[verbose] Response status: ${response.status} ${response.statusText}`
+      );
+    }
+    log('downloadFile: response status %d', response.status);
   } catch (err) {
+    if (verbose) {
+      const status = err.response?.status;
+      const statusText = err.response?.statusText;
+      console.error(`[verbose] Response error: ${status} ${statusText}`);
+      if (err.response?.headers) {
+        console.error(
+          `[verbose] Response headers: ${JSON.stringify(err.response.headers, null, 2)}`
+        );
+      }
+    }
     if (err.response?.data?.destroy) {
       err.response.data.destroy();
     }
@@ -451,9 +484,17 @@ export async function downloadCard(options) {
  * @param {object} options
  * @param {Array} options.attachments - Array of attachment objects.
  * @param {string} options.filesDir - Path to the files directory.
+ * @param {string} options.cardId - The Trello card ID (for constructing download URLs).
+ * @param {string} options.apiBase - The API base URL.
  * @param {object} options.argv - Parsed CLI arguments.
  */
-async function saveAttachments({ attachments, filesDir, argv }) {
+async function saveAttachments({
+  attachments,
+  filesDir,
+  cardId,
+  apiBase,
+  argv,
+}) {
   if (!attachments || attachments.length === 0) {
     return;
   }
@@ -465,12 +506,23 @@ async function saveAttachments({ attachments, filesDir, argv }) {
   }
   await mkdir(filesDir, { recursive: true });
   console.log(`\n✓ Downloading ${attachments.length} attachment(s):`);
-  const params = { key: argv.key, token: argv.token };
   for (const attachment of attachments) {
     const fileName = attachment.name || `attachment_${attachment.id}`;
     const filePath = path.join(filesDir, fileName);
+    // Use the authenticated Trello API download endpoint instead of the raw attachment URL.
+    // Trello changed attachment hosting in 2021: direct S3 URLs with query params no longer work.
+    // The correct endpoint requires Authorization header with OAuth credentials.
+    // See: https://community.developer.atlassian.com/t/update-authenticated-access-to-s3/43681
+    const downloadUrl =
+      attachment.id && cardId
+        ? `${apiBase}/cards/${cardId}/attachments/${attachment.id}/download/${encodeURIComponent(fileName)}`
+        : attachment.url;
     try {
-      await downloadFile(attachment.url, filePath, params);
+      await downloadFile(downloadUrl, filePath, {
+        key: argv.key,
+        token: argv.token,
+        verbose: argv.verbose,
+      });
       console.log(`  - Downloaded: ./${filePath}`);
     } catch (err) {
       console.error(`  - Failed to download ${fileName}: ${err.message}`);
@@ -515,6 +567,13 @@ if (invokedPath === currentFilePath) {
     .option('skip-files-download', {
       alias: 'f',
       describe: 'Skip downloading files and use direct Trello URLs instead',
+      type: 'boolean',
+      default: false,
+    })
+    .option('verbose', {
+      alias: 'v',
+      describe:
+        'Enable verbose output: log HTTP requests and responses for debugging',
       type: 'boolean',
       default: false,
     })
@@ -608,13 +667,21 @@ if (invokedPath === currentFilePath) {
     }
 
     // Download all attachments (only if not skipping files)
+    const attachmentsApiBase =
+      process.env.TRELLO_API_BASE_URL || 'https://api.trello.com/1';
     const attachments = await fetchCardAttachments({
       cardId,
       key: argv.key,
       token: argv.token,
-      apiBase: process.env.TRELLO_API_BASE_URL || 'https://api.trello.com/1',
+      apiBase: attachmentsApiBase,
     });
-    await saveAttachments({ attachments, filesDir, argv });
+    await saveAttachments({
+      attachments,
+      filesDir,
+      cardId,
+      apiBase: attachmentsApiBase,
+      argv,
+    });
   } catch (err) {
     if (typeof err.toJSON === 'function') {
       console.error('AxiosError:', JSON.stringify(err.toJSON(), null, 2));
