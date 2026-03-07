@@ -26,6 +26,7 @@ Also the program stuck after `- Failed to download image.png: Request failed wit
 ```
 
 **Two problems reported:**
+
 1. HTTP 401 Unauthorized when downloading card attachments (despite successful card fetch)
 2. Process hangs after the download failure (promises leak)
 
@@ -44,6 +45,7 @@ konard@MacBook-Pro-Konstantin trello-api-tools % ./download-card.mjs https://tre
 ```
 
 Owner requested:
+
 - Add `--verbose` mode to see exact HTTP requests and responses
 - Deep case study in `./docs/case-studies/issue-5/`
 - If related to another project, file GitHub issues there with reproducible examples
@@ -66,6 +68,7 @@ Owner requested:
 Research into the Trello developer community revealed that Trello changed their attachment hosting system significantly:
 
 **Key official announcements:**
+
 - [Authenticated Access to S3](https://community.developer.atlassian.com/t/authenticated-access-to-s3/40647) — Initial announcement that public S3 URLs were being disabled
 - [Update: Authenticated Access to S3](https://community.developer.atlassian.com/t/update-authenticated-access-to-s3/43681) — Query parameter authorization turned off on **January 25, 2021**
 - [New Download URL for attachments](https://community.developer.atlassian.com/t/new-download-url-for-attachments/51012) — New download URL format announced August 2021
@@ -91,6 +94,7 @@ https://trello-attachments.s3.amazonaws.com/.../{filename}?...
 ```
 
 **Trello's changes (2020-2021):**
+
 - Trello stopped using publicly-accessible S3 URLs for attachments
 - The old S3 URLs with embedded signatures no longer work
 - Query parameter authentication (`?key=...&token=...`) to the old URLs was disabled on **January 25, 2021**
@@ -101,12 +105,18 @@ https://trello-attachments.s3.amazonaws.com/.../{filename}?...
 Even with the new URL, the authentication method matters:
 
 **What was used (wrong for some URL formats):**
+
 ```js
 // Passing key and token as query parameters
-response = await axios({ method: 'GET', url: attachment.url, params: { key, token } });
+response = await axios({
+  method: 'GET',
+  url: attachment.url,
+  params: { key, token },
+});
 ```
 
 **What should be used:**
+
 ```
 Authorization: OAuth oauth_consumer_key="{{key}}", oauth_token="{{token}}"
 ```
@@ -114,6 +124,7 @@ Authorization: OAuth oauth_consumer_key="{{key}}", oauth_token="{{token}}"
 The community discussion confirms: _"Making a GET request with the key and token in the `Authorization` header will return the hosted file."_
 
 Sources:
+
 - [Atlassian community: getting 401 when downloading attachment](https://community.atlassian.com/forums/Trello-questions/trello-REST-API-getting-401-unauthorized-when-downloading/qaq-p/1775167)
 - [Download attachments with API](https://community.developer.atlassian.com/t/download-attachments-with-api/72386)
 
@@ -140,13 +151,15 @@ async function downloadFile(url, filePath, params = {}) {
   const { key, token, ...otherParams } = params;
   const headers = {};
   if (key && token) {
-    headers['Authorization'] = `OAuth oauth_consumer_key="${key}", oauth_token="${token}"`;
+    headers['Authorization'] =
+      `OAuth oauth_consumer_key="${key}", oauth_token="${token}"`;
   }
   // ... rest of download logic with headers instead of params
 }
 ```
 
 This approach works because:
+
 - It uses the accepted OAuth header format
 - Works with both old and new Trello attachment URL formats
 - Credentials are not exposed in URL logs
@@ -160,6 +173,7 @@ https://api.trello.com/1/cards/{idCard}/attachments/{idAttachment}/download/{fil
 ```
 
 This requires:
+
 1. Storing `idCard` and `idAttachment` from the attachment metadata
 2. Constructing the new URL from the attachment object fields
 
@@ -168,6 +182,7 @@ The attachment object from the API contains: `id`, `idMember`, `date`, `url`, `n
 ### Solution C: Both Methods (Most Robust)
 
 Use Authorization header AND construct correct download URL:
+
 1. Build new URL: `https://api.trello.com/1/cards/{cardId}/attachments/{attachment.id}/download/{attachment.name}`
 2. Pass via Authorization header
 
@@ -178,6 +193,7 @@ Use Authorization header AND construct correct download URL:
 ### 1. Add `--verbose` Mode
 
 Add a `--verbose` flag to yargs that enables:
+
 - Logging each HTTP request URL and headers (with credentials redacted in non-debug output)
 - Logging HTTP response status codes
 - Logging any redirects
@@ -190,7 +206,8 @@ Update `downloadFile()` to use the Authorization header:
 async function downloadFile(url, filePath, { key, token } = {}) {
   const headers = {};
   if (key && token) {
-    headers['Authorization'] = `OAuth oauth_consumer_key="${key}", oauth_token="${token}"`;
+    headers['Authorization'] =
+      `OAuth oauth_consumer_key="${key}", oauth_token="${token}"`;
   }
   // ... use headers in axios call
 }
