@@ -55,12 +55,15 @@ const yargs = yargsModule.default || yargsModule;
 async function downloadFile(url, filePath, { key, token, verbose } = {}) {
   const headers = {};
   if (key && token) {
-    headers['Authorization'] = `OAuth oauth_consumer_key="${key}", oauth_token="${token}"`;
+    headers['Authorization'] =
+      `OAuth oauth_consumer_key="${key}", oauth_token="${token}"`;
   }
 
   if (verbose) {
     console.error(`[verbose] GET ${url}`);
-    console.error(`[verbose] Headers: Authorization: OAuth oauth_consumer_key="<redacted>", oauth_token="<redacted>"`);
+    console.error(
+      `[verbose] Headers: Authorization: OAuth oauth_consumer_key="<redacted>", oauth_token="<redacted>"`
+    );
   }
   log('downloadFile: GET %s', url);
 
@@ -73,7 +76,9 @@ async function downloadFile(url, filePath, { key, token, verbose } = {}) {
       headers,
     });
     if (verbose) {
-      console.error(`[verbose] Response status: ${response.status} ${response.statusText}`);
+      console.error(
+        `[verbose] Response status: ${response.status} ${response.statusText}`
+      );
     }
     log('downloadFile: response status %d', response.status);
   } catch (err) {
@@ -82,7 +87,9 @@ async function downloadFile(url, filePath, { key, token, verbose } = {}) {
       const statusText = err.response?.statusText;
       console.error(`[verbose] Response error: ${status} ${statusText}`);
       if (err.response?.headers) {
-        console.error(`[verbose] Response headers: ${JSON.stringify(err.response.headers, null, 2)}`);
+        console.error(
+          `[verbose] Response headers: ${JSON.stringify(err.response.headers, null, 2)}`
+        );
       }
     }
     if (err.response?.data?.destroy) {
@@ -481,7 +488,13 @@ export async function downloadCard(options) {
  * @param {string} options.apiBase - The API base URL.
  * @param {object} options.argv - Parsed CLI arguments.
  */
-async function saveAttachments({ attachments, filesDir, cardId, apiBase, argv }) {
+async function saveAttachments({
+  attachments,
+  filesDir,
+  cardId,
+  apiBase,
+  argv,
+}) {
   if (!attachments || attachments.length === 0) {
     return;
   }
@@ -500,9 +513,10 @@ async function saveAttachments({ attachments, filesDir, cardId, apiBase, argv })
     // Trello changed attachment hosting in 2021: direct S3 URLs with query params no longer work.
     // The correct endpoint requires Authorization header with OAuth credentials.
     // See: https://community.developer.atlassian.com/t/update-authenticated-access-to-s3/43681
-    const downloadUrl = attachment.id && cardId
-      ? `${apiBase}/cards/${cardId}/attachments/${attachment.id}/download/${encodeURIComponent(fileName)}`
-      : attachment.url;
+    const downloadUrl =
+      attachment.id && cardId
+        ? `${apiBase}/cards/${cardId}/attachments/${attachment.id}/download/${encodeURIComponent(fileName)}`
+        : attachment.url;
     try {
       await downloadFile(downloadUrl, filePath, {
         key: argv.key,
@@ -558,7 +572,8 @@ if (invokedPath === currentFilePath) {
     })
     .option('verbose', {
       alias: 'v',
-      describe: 'Enable verbose output: log HTTP requests and responses for debugging',
+      describe:
+        'Enable verbose output: log HTTP requests and responses for debugging',
       type: 'boolean',
       default: false,
     })
@@ -652,14 +667,21 @@ if (invokedPath === currentFilePath) {
     }
 
     // Download all attachments (only if not skipping files)
-    const attachmentsApiBase = process.env.TRELLO_API_BASE_URL || 'https://api.trello.com/1';
+    const attachmentsApiBase =
+      process.env.TRELLO_API_BASE_URL || 'https://api.trello.com/1';
     const attachments = await fetchCardAttachments({
       cardId,
       key: argv.key,
       token: argv.token,
       apiBase: attachmentsApiBase,
     });
-    await saveAttachments({ attachments, filesDir, cardId, apiBase: attachmentsApiBase, argv });
+    await saveAttachments({
+      attachments,
+      filesDir,
+      cardId,
+      apiBase: attachmentsApiBase,
+      argv,
+    });
   } catch (err) {
     if (typeof err.toJSON === 'function') {
       console.error('AxiosError:', JSON.stringify(err.toJSON(), null, 2));
