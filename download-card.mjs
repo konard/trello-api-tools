@@ -354,34 +354,58 @@ function buildCommentsMarkdown(comments) {
  * @param {boolean} skipFiles - Whether to use direct URLs instead of local paths.
  * @returns {string} - Markdown attachments section.
  */
+/**
+ * Get display name for an attachment. Generic names like "image.png" are
+ * replaced with the attachment ID to make them distinguishable.
+ */
+function getAttachmentDisplayName(attachment) {
+  const originalName = attachment.name || `attachment_${attachment.id}`;
+  const ext = path.extname(originalName);
+  const baseName = path.basename(originalName, ext);
+  // Replace generic names like "image" with the attachment ID
+  if (/^image$/i.test(baseName) && attachment.id) {
+    return `${attachment.id}${ext}`;
+  }
+  return originalName;
+}
+
 function buildAttachmentsMarkdown(attachments, skipFiles) {
   if (!attachments || attachments.length === 0) {
     return '';
   }
+  // Build a map of unique local filenames: use 1.ext, 2.ext, ... to avoid collisions
+  const localNames = attachments.map((attachment, index) => {
+    const originalName = attachment.name || `attachment_${attachment.id}`;
+    const ext = path.extname(originalName);
+    return `${index + 1}${ext}`;
+  });
+
   let md = '## Attachments\n\n';
-  for (const attachment of attachments) {
-    const fileName = attachment.name || `attachment_${attachment.id}`;
-    const isImage = /\.(png|jpg|jpeg|gif|bmp|svg)$/i.test(fileName);
-    md += `### ${fileName}\n\n`;
+  for (let i = 0; i < attachments.length; i++) {
+    const attachment = attachments[i];
+    const displayName = getAttachmentDisplayName(attachment);
+    const localName = localNames[i];
+    const isImage = /\.(png|jpg|jpeg|gif|bmp|svg)$/i.test(displayName);
+    md += `### ${displayName}\n\n`;
+    if (skipFiles) {
+      if (isImage) {
+        md += `<img src="${attachment.url}" alt="${displayName}" />\n\n`;
+      } else {
+        md += `[${displayName}](${attachment.url})\n\n`;
+      }
+    } else {
+      if (isImage) {
+        md += `<img src="./files/${localName}" alt="${displayName}" />\n\n`;
+      } else {
+        md += `[${displayName}](./files/${localName})\n\n`;
+      }
+    }
     md += `- **Source URL**: ${attachment.url}\n`;
     if (attachment.bytes) {
       md += `- **Size**: ${attachment.bytes} bytes\n`;
     }
     if (attachment.date) {
       md += `- **Created**: ${attachment.date}\n`;
-    }
-    if (skipFiles) {
-      if (isImage) {
-        md += `\n<img src="${attachment.url}" alt="${fileName}" />\n`;
-      } else {
-        md += `\n[${fileName}](${attachment.url})\n`;
-      }
-    } else {
-      if (isImage) {
-        md += `\n<img src="./files/${fileName}" alt="${fileName}" />\n`;
-      } else {
-        md += `\n[${fileName}](./files/${fileName})\n`;
-      }
     }
     md += '\n';
   }
@@ -470,7 +494,12 @@ export async function downloadCard(options) {
     md += '\n';
     md += buildChecklistsMarkdown(checklists);
     md += buildCommentsMarkdown(comments);
-    md += buildAttachmentsMarkdown(attachments, skipFiles);
+    if (attachments && attachments.length > 0) {
+      if (!md.endsWith('\n\n')) {
+        md += '\n';
+      }
+      md += buildAttachmentsMarkdown(attachments, skipFiles);
+    }
 
     return { card, markdown: md, comments, checklists };
   } catch (err) {
@@ -506,8 +535,11 @@ async function saveAttachments({
   }
   await mkdir(filesDir, { recursive: true });
   console.log(`\n✓ Downloading ${attachments.length} attachment(s):`);
-  for (const attachment of attachments) {
-    const fileName = attachment.name || `attachment_${attachment.id}`;
+  for (let i = 0; i < attachments.length; i++) {
+    const attachment = attachments[i];
+    const originalName = attachment.name || `attachment_${attachment.id}`;
+    const ext = path.extname(originalName);
+    const fileName = `${i + 1}${ext}`;
     const filePath = path.join(filesDir, fileName);
     // Use the authenticated Trello API download endpoint instead of the raw attachment URL.
     // Trello changed attachment hosting in 2021: direct S3 URLs with query params no longer work.
@@ -515,7 +547,7 @@ async function saveAttachments({
     // See: https://community.developer.atlassian.com/t/update-authenticated-access-to-s3/43681
     const downloadUrl =
       attachment.id && cardId
-        ? `${apiBase}/cards/${cardId}/attachments/${attachment.id}/download/${encodeURIComponent(fileName)}`
+        ? `${apiBase}/cards/${cardId}/attachments/${attachment.id}/download/${encodeURIComponent(originalName)}`
         : attachment.url;
     try {
       await downloadFile(downloadUrl, filePath, {
