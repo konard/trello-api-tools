@@ -169,6 +169,35 @@ async function fetchCardComments({ cardId, key, token, apiBase }) {
 }
 
 /**
+ * Fetch the creator of a Trello card via the createCard action.
+ * @param {object} options
+ * @param {string} options.cardId - The Trello card ID.
+ * @param {string} options.key - API key.
+ * @param {string} options.token - API token.
+ * @param {string} options.apiBase - Base URL.
+ * @returns {Promise<object|null>} - Creator member object, or null.
+ */
+async function fetchCardCreator({ cardId, key, token, apiBase }) {
+  log('fetchCardCreator called with cardId=%s', cardId);
+  const url = `${apiBase}/cards/${cardId}/actions`;
+
+  try {
+    const response = await axios.get(url, {
+      params: { key, token, filter: 'createCard', limit: 1 },
+    });
+    const actions = response.data;
+    if (actions && actions.length > 0 && actions[0].memberCreator) {
+      log('Found card creator: %s', actions[0].memberCreator.username);
+      return actions[0].memberCreator;
+    }
+    return null;
+  } catch (err) {
+    log('Failed to fetch card creator: %O', err);
+    return null;
+  }
+}
+
+/**
  * Fetch checklists for a Trello card.
  * @param {object} options
  * @param {string} options.cardId - The Trello card ID.
@@ -260,20 +289,68 @@ function formatCommentDate(dateString) {
 }
 
 /**
+ * Extract creation date from a Trello card ID (MongoDB ObjectId).
+ * The first 8 hex characters encode a Unix timestamp.
+ * @param {string} id - The card ID.
+ * @returns {Date|null} - The creation date, or null if invalid.
+ */
+function getCreationDateFromId(id) {
+  if (!id || id.length < 8) return null;
+  const timestamp = parseInt(id.substring(0, 8), 16);
+  if (isNaN(timestamp)) return null;
+  return new Date(timestamp * 1000);
+}
+
+/**
  * Build markdown metadata section for a card.
  * @param {object} card - Trello card object.
+ * @param {object} [creator] - Creator member object (from createCard action).
+ * @param {string} [boardName] - Board name.
+ * @param {string} [listName] - List name.
  * @returns {string} - Markdown metadata lines.
  */
-function buildCardMetadata(card) {
+function buildCardMetadata(card, creator, boardInfo, listInfo) {
   let md = `# ${card.name}\n\n`;
+  if (card.idShort != null) {
+    md += `- **Card Number**: #${card.idShort}\n`;
+  }
   md += `- **ID**: ${card.id}\n`;
   if (card.shortLink) {
     md += `- **Short Link**: https://trello.com/c/${card.shortLink}\n`;
   }
-  if (card.idBoard) {
+  if (card.url) {
+    md += `- **Full URL**: ${card.url}\n`;
+  }
+  if (creator) {
+    const name = creator.fullName || creator.username || 'Unknown';
+    if (creator.username) {
+      md += `- **Author**: [${name} (@${creator.username})](https://trello.com/${creator.username})\n`;
+    } else {
+      md += `- **Author**: ${name}\n`;
+    }
+  }
+  const createdDate = getCreationDateFromId(card.id);
+  if (createdDate) {
+    md += `- **Created**: ${createdDate.toISOString()}\n`;
+  }
+  if (card.dateLastActivity) {
+    md += `- **Last Updated**: ${card.dateLastActivity}\n`;
+  }
+  if (boardInfo && boardInfo.name) {
+    const boardUrl =
+      boardInfo.url ||
+      (boardInfo.shortLink
+        ? `https://trello.com/b/${boardInfo.shortLink}`
+        : null);
+    md += boardUrl
+      ? `- **Board**: [${boardInfo.name}](${boardUrl})\n`
+      : `- **Board**: ${boardInfo.name}\n`;
+  } else if (card.idBoard) {
     md += `- **Board ID**: ${card.idBoard}\n`;
   }
-  if (card.idList) {
+  if (listInfo && listInfo.name) {
+    md += `- **List**: ${listInfo.name} (${listInfo.id || card.idList})\n`;
+  } else if (card.idList) {
     md += `- **List ID**: ${card.idList}\n`;
   }
   if (card.closed) {
@@ -292,6 +369,9 @@ function buildCardMetadata(card) {
     if (labelNames.length > 0) {
       md += `- **Labels**: ${labelNames.join(', ')}\n`;
     }
+  }
+  if (card.idMembers && card.idMembers.length > 0) {
+    md += `- **Members**: ${card.idMembers.length} assigned\n`;
   }
   return md;
 }
@@ -473,25 +553,41 @@ export async function downloadCard(options) {
     log('Received card data: %O', response.data);
     const card = response.data;
 
-    const comments = await fetchCardComments({ cardId, key, token, apiBase });
-    const checklists = await fetchCardChecklists({
-      cardId,
-      key,
-      token,
-      apiBase,
-    });
-    const attachments = await fetchCardAttachments({
-      cardId,
-      key,
-      token,
-      apiBase,
-    });
+    const fetchBoardInfo = card.idBoard
+      ? axios
+          .get(`${apiBase}/boards/${card.idBoard}`, {
+            params: { key, token, fields: 'name,shortLink,url' },
+          })
+          .then((r) => r.data)
+          .catch(() => null)
+      : Promise.resolve(null);
 
-    let md = buildCardMetadata(card);
-    md += `\n## Description\n\n`;
-    md += card.desc || '';
-    log('Added description to Markdown');
-    md += '\n';
+    const fetchListInfo = card.idList
+      ? axios
+          .get(`${apiBase}/lists/${card.idList}`, {
+            params: { key, token, fields: 'name' },
+          })
+          .then((r) => r.data)
+          .catch(() => null)
+      : Promise.resolve(null);
+
+    const [comments, checklists, attachments, creator, boardInfo, listInfo] =
+      await Promise.all([
+        fetchCardComments({ cardId, key, token, apiBase }),
+        fetchCardChecklists({ cardId, key, token, apiBase }),
+        fetchCardAttachments({ cardId, key, token, apiBase }),
+        fetchCardCreator({ cardId, key, token, apiBase }),
+        fetchBoardInfo,
+        fetchListInfo,
+      ]);
+
+    let md = buildCardMetadata(card, creator, boardInfo, listInfo);
+    if (card.desc && card.desc.trim()) {
+      md += `\n## Description\n\n`;
+      md += card.desc;
+      md += '\n';
+    }
+    log('Built card markdown');
     md += buildChecklistsMarkdown(checklists);
     md += buildCommentsMarkdown(comments);
     if (attachments && attachments.length > 0) {
@@ -555,7 +651,7 @@ async function saveAttachments({
         token: argv.token,
         verbose: argv.verbose,
       });
-      console.log(`  - Downloaded: ./${filePath}`);
+      console.log(`  - Downloaded: ./${filePath} (${path.resolve(filePath)})`);
     } catch (err) {
       console.error(`  - Failed to download ${fileName}: ${err.message}`);
     }
@@ -670,8 +766,8 @@ if (invokedPath === currentFilePath) {
     await writeFile(jsonPath, JSON.stringify(card, null, 2), 'utf-8');
 
     console.log(`✓ Card downloaded successfully:`);
-    console.log(`  - Markdown: ./${mdPath}`);
-    console.log(`  - JSON: ./${jsonPath}`);
+    console.log(`  - Markdown: ./${mdPath} (${path.resolve(mdPath)})`);
+    console.log(`  - JSON: ./${jsonPath} (${path.resolve(jsonPath)})`);
 
     // Save comments as individual JSON files
     if (comments && comments.length > 0) {
@@ -681,7 +777,7 @@ if (invokedPath === currentFilePath) {
         const commentFileName = getCommentFileName(comment);
         const commentPath = path.join(commentsDir, commentFileName);
         await writeFile(commentPath, JSON.stringify(comment, null, 2), 'utf-8');
-        console.log(`  - Saved: ./${commentPath}`);
+        console.log(`  - Saved: ./${commentPath} (${path.resolve(commentPath)})`);
       }
     }
 
@@ -694,7 +790,7 @@ if (invokedPath === currentFilePath) {
         'utf-8'
       );
       console.log(
-        `\n✓ Saved ${checklists.length} checklist(s): ./${checklistsPath}`
+        `\n✓ Saved ${checklists.length} checklist(s): ./${checklistsPath} (${path.resolve(checklistsPath)})`
       );
     }
 

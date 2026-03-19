@@ -132,7 +132,87 @@ test('downloadCard: should return card, markdown, and comments', async () => {
 test('downloadCard: should include card metadata in markdown', async () => {
   const { markdown } = await downloadCard({ cardId: card.id, key, token });
   equal(markdown.includes(`**ID**: ${card.id}`), true);
-  equal(markdown.includes('## Description'), true);
+  equal(markdown.includes(`**ID**: ${card.id}`), true);
+});
+
+test('downloadCard: should include Details section with card number, author, and timestamps', async () => {
+  const { markdown, card: cardData } = await downloadCard({
+    cardId: card.id,
+    key,
+    token,
+  });
+  // Card number
+  equal(
+    markdown.includes(`**Card Number**: #${cardData.idShort}`),
+    true,
+    'Should include card number'
+  );
+  // Author as a link to Trello profile
+  equal(markdown.includes('**Author**:'), true, 'Should include author');
+  equal(
+    markdown.includes('https://trello.com/'),
+    true,
+    'Should include link to author profile'
+  );
+  // Created timestamp (derived from MongoDB ObjectId)
+  equal(markdown.includes('**Created**:'), true, 'Should include created date');
+  // Last Updated timestamp
+  equal(
+    markdown.includes('**Last Updated**:'),
+    true,
+    'Should include last updated date'
+  );
+  // Board name with link
+  equal(markdown.includes('**Board**:'), true, 'Should include board');
+  equal(
+    markdown.includes('https://trello.com/b/'),
+    true,
+    'Should include link to board'
+  );
+  // List name (resolved from ID)
+  equal(markdown.includes('**List**:'), true, 'Should include list name');
+});
+
+test('downloadCard: should omit Description section when description is empty', async () => {
+  // The test card was created without a description
+  const { markdown } = await downloadCard({ cardId: card.id, key, token });
+  equal(
+    markdown.includes('## Description'),
+    false,
+    'Should not include empty Description section'
+  );
+});
+
+test('downloadCard: Details section should appear between title and Description/content', async () => {
+  const { markdown } = await downloadCard({ cardId: card.id, key, token });
+  const titleIndex = markdown.indexOf('# ');
+  const idIndex = markdown.indexOf('**ID**:');
+  equal(titleIndex < idIndex, true, 'Title should come before metadata');
+  // Metadata fields should come before any content sections
+  const checklistsIndex = markdown.indexOf('## Checklists');
+  const commentsIndex = markdown.indexOf('## Comments');
+  const attachmentsIndex = markdown.indexOf('## Attachments');
+  if (checklistsIndex !== -1) {
+    equal(
+      idIndex < checklistsIndex,
+      true,
+      'Metadata should come before Checklists'
+    );
+  }
+  if (commentsIndex !== -1) {
+    equal(
+      idIndex < commentsIndex,
+      true,
+      'Metadata should come before Comments'
+    );
+  }
+  if (attachmentsIndex !== -1) {
+    equal(
+      idIndex < attachmentsIndex,
+      true,
+      'Metadata should come before Attachments'
+    );
+  }
 });
 
 test('CLI: should support --output-dir option', async () => {
@@ -192,6 +272,21 @@ test('CLI: should handle missing card ID', async () => {
   }
 });
 
+test('downloadCard: should include Full URL in markdown', async () => {
+  const { markdown, card: cardData } = await downloadCard({
+    cardId: card.id,
+    key,
+    token,
+  });
+  if (cardData.url) {
+    equal(
+      markdown.includes(`**Full URL**: ${cardData.url}`),
+      true,
+      'Should include full URL'
+    );
+  }
+});
+
 test('CLI: should show help with --help', async () => {
   const { stdout } = await $`node ${downloadScript} --help`;
   equal(stdout.includes('Usage:'), true);
@@ -201,12 +296,13 @@ test('CLI: should show help with --help', async () => {
   equal(stdout.includes('--skip-files-download'), true);
 });
 
-test('downloadCard: should handle card without description', async () => {
-  // The created test card might not have a description, which is good for testing
+test('downloadCard: should handle card without description gracefully', async () => {
+  // The created test card has no description
   const { markdown } = await downloadCard({ cardId: card.id, key, token });
   equal(typeof markdown, 'string');
-  // Should not crash even if description is empty
   equal(markdown.length > 0, true);
+  // Empty description should not produce a Description section
+  equal(markdown.includes('## Description'), false);
 });
 
 test('downloadCard: should handle checklists in card structure', async () => {
